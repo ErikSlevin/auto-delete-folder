@@ -1,16 +1,16 @@
 ﻿#Welcher Ordner soll automatisch geleert werden?
-$ClearFolder = "C:\Users\erikw\Downloads\"
+$ClearFolder = "$env:USERPROFILE\Downloads\"
 
 # Speicherort von der.log- und csv-File
-$logs = "C:\Users\erikw\skripte\logs\"
-$csv = "${$logs}download-autodelete.csv"
+$logs = "$env:USERPROFILE\skripte\logs\"
+$csv = $logs + "\download-autodelete.csv"
 
 # Aktuelles Datum und Uhrzeit
 $Datum = Get-Date -Format "dd.MM.yyyy"
 $Uhrzeit = "$(Get-Date -Format "HH:mm") Uhr"
 
 
-Start-Transcript -Path "${$logs}$(Get-Date -Format "yyyy-MM-dd-HH-mm")_download-autodelete.log"
+Start-Transcript -Path $logs"\$(Get-Date -Format "yyyy-MM-dd-HH-mm")_download-autodelete.log"
 
 try{
     # Wenn $ClearFolder existiert, lese alle Informationen ein
