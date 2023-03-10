@@ -1,47 +1,44 @@
-﻿#Welcher Ordner soll automatisch geleert werden?
-$ClearFolder = "$env:USERPROFILE\Downloads\"
+﻿# Ordner, der automatisch geleert werden soll
+$ClearFolder = "$env:USERPROFILE\Downloads"
 
-# Speicherort von der.log- und csv-File
-$logs = "$env:USERPROFILE\skripte\logs\"
-$csv = $logs + "\download-autodelete.csv"
+# Speicherort für das Log und die CSV-Datei
+$logs = "$env:USERPROFILE\skripte\logs"
+$csv = Join-Path $logs "download-autodelete.csv"
 
 # Aktuelles Datum und Uhrzeit
 $Datum = Get-Date -Format "dd.MM.yyyy"
-$Uhrzeit = "$(Get-Date -Format "HH:mm") Uhr"
+$Uhrzeit = Get-Date -Format "HH:mm"
 
+# Beginn des Transcripts
+Start-Transcript -Path (Join-Path $logs "$(Get-Date -Format "yyyy-MM-dd-HH-mm")_download-autodelete.log")
 
-Start-Transcript -Path $logs"\$(Get-Date -Format "yyyy-MM-dd-HH-mm")_download-autodelete.log"
-
-try{
-    # Wenn $ClearFolder existiert, lese alle Informationen ein
-    if (Test-Path -Path $ClearFolder){
-        $Inhalt = Get-FolderSize -BasePath $ClearFolder
-        $Inhalt = $Inhalt | Select-Object `
-            @{l="Datum"; e={$Datum}},`
-            @{l="Uhrzeit"; e={$Uhrzeit}},`
-            @{l="Datei"; e={$_.FolderName}},`
-            @{l="Dateigröße"; e={$_.SizeMB}}
+try {
+    # Prüfen, ob der Ordner existiert
+    if (Test-Path -Path $ClearFolder -PathType Container) {
+        # Informationen zum Ordner einlesen
+        $Inhalt = Get-FolderSize -BasePath $ClearFolder | 
+            Select-Object @{l="Datum"; e={$Datum}}, @{l="Uhrzeit"; e={$Uhrzeit}}, @{l="Datei"; e={$_.FolderName}}, @{l="Dateigröße"; e={$_.SizeMB}}
 
         # CSV-Übersicht erstellen, falls vorhanden die Informationen ergänzen
-        if (Test-Path $csv -PathType leaf){
-            $Inhalt | Export-csv -Append $csv -Encoding UTF8 -Delimiter ';'
+        if (Test-Path $csv -PathType Leaf) {
+            $Inhalt | Export-Csv -Append $csv -Encoding UTF8 -Delimiter ';'
         } else {
-            $Inhalt | Export-csv $csv -Encoding UTF8 -Delimiter ';'
+            $Inhalt | Export-Csv $csv -Encoding UTF8 -Delimiter ';'
         }
-        
+
         # Alle Daten löschen
-        Remove-Item $ClearFolder* -Recurse -Force
-    } 
+        Remove-Item -Path "$ClearFolder\*" -Recurse -Force
+    } else {
+        Write-Host "$Datum | $Uhrzeit | Ordner '$ClearFolder' nicht gefunden"
+    }
 }
-
 # Ausgabe Fehlermeldung
-catch{
-    Write-Host "$($Datum) | $($Uhrzeit) | $($_.Exception.Message)"
+catch {
+    Write-Host "$Datum | $Uhrzeit | Fehler: $($_.Exception.Message)"
 }
 
-# Ausgabe für Log
-finally{
-    Write-Host "$($Datum) | $($Uhrzeit) | Download Autoclean erfolgreich ausgeführt!"
+# Ende des Transcripts
+finally {
+    Write-Host "$Datum | $Uhrzeit | Download-Ordner erfolgreich geleert"
+    Stop-Transcript
 }
-
-Stop-Transcript
