@@ -1,44 +1,51 @@
-﻿# Ordner, der automatisch geleert werden soll
-$ClearFolder = "$env:USERPROFILE\Downloads"
+# Definiere den Pfad zum Download-Ordner
+$DownloadOrdner = "$env:userprofile\Downloads"
 
-# Speicherort für das Log und die CSV-Datei
-$logs = "$env:USERPROFILE\skripte\logs"
-$csv = Join-Path $logs "download-autodelete.csv"
+# Definiere den Pfad zum Ordner, in dem das Protokoll gespeichert wird
+$ProtokollOrdner = "$env:userprofile\Skripte\logs"
 
-# Aktuelles Datum und Uhrzeit
-$Datum = Get-Date -Format "dd.MM.yyyy"
-$Uhrzeit = Get-Date -Format "HH:mm"
+# Definiere den Namen der CSV-Datei
+$ProtokollDatei = "DownloadProtokoll.csv"
 
-# Beginn des Transcripts
-Start-Transcript -Path (Join-Path $logs "$(Get-Date -Format "yyyy-MM-dd-HH-mm")_download-autodelete.log")
-
-try {
-    # Prüfen, ob der Ordner existiert
-    if (Test-Path -Path $ClearFolder -PathType Container) {
-        # Informationen zum Ordner einlesen
-        $Inhalt = Get-FolderSize -BasePath $ClearFolder | 
-            Select-Object @{l="Datum"; e={$Datum}}, @{l="Uhrzeit"; e={$Uhrzeit}}, @{l="Datei"; e={$_.FolderName}}, @{l="Dateigröße"; e={$_.SizeMB}}
-
-        # CSV-Übersicht erstellen, falls vorhanden die Informationen ergänzen
-        if (Test-Path $csv -PathType Leaf) {
-            $Inhalt | Export-Csv -Append $csv -Encoding UTF8 -Delimiter ';'
-        } else {
-            $Inhalt | Export-Csv $csv -Encoding UTF8 -Delimiter ';'
-        }
-
-        # Alle Daten löschen
-        Remove-Item -Path "$ClearFolder\*" -Recurse -Force
-    } else {
-        Write-Host "$Datum | $Uhrzeit | Ordner '$ClearFolder' nicht gefunden"
+# Funktion, um die Größe von Dateien oder Ordnern in lesbarer Form zurückzugeben
+function ConvertTo-ReadableSize ($Size) {
+    $Einheiten = "B", "KB", "MB", "GB"
+    $Index = 0
+    while ($Size -ge 1KB -and $Index -lt ($Einheiten.Length - 1)) {
+        $Size /= 1KB
+        $Index++
     }
+    "{0:N2} {1}" -f $Size, $Einheiten[$Index]
 }
-# Ausgabe Fehlermeldung
-catch {
-    Write-Host "$Datum | $Uhrzeit | Fehler: $($_.Exception.Message)"
+# Wenn der ProtokollOrdner nicht vorhanden ist, erstelle ihn
+if (-not (Test-Path $ProtokollOrdner)) {
+    $null = New-Item -ItemType Directory -Path $ProtokollOrdner
 }
 
-# Ende des Transcripts
-finally {
-    Write-Host "$Datum | $Uhrzeit | Download-Ordner erfolgreich geleert"
-    Stop-Transcript
+# Lösche alle Dateien und Ordner im Download-Ordner und protokolliere sie in der CSV-Datei
+Get-ChildItem -Path $DownloadOrdner -Recurse | ForEach-Object {
+    if ($_ -is [System.IO.DirectoryInfo]) {
+        # Ordner löschen und Größe protokollieren
+        $OrdnerGroesse = Get-ChildItem -Path $_.FullName -Recurse | Measure-Object -Property Length -Sum | Select-Object -ExpandProperty Sum
+        Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        $OrdnerGroesseLesbar = ConvertTo-ReadableSize -Size $OrdnerGroesse
+        $Protokoll = [PSCustomObject]@{
+            "Zeitstempel" = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+            "Name" = $_.Name + " (Ordner)"
+            "Groeße" = "$OrdnerGroesseLesbar"
+        }
+        $Protokoll | Export-Csv -Path (Join-Path -Path $ProtokollOrdner -ChildPath $ProtokollDatei) -Append -Encoding UTF8 -NoTypeInformation -Delimiter ';'
+    }
+    else {
+        # Datei löschen und Größe protokollieren
+        $DateiGroesse = $_ | Measure-Object -Property Length -Sum | Select-Object -ExpandProperty Sum
+        Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+        $DateiGroesseLesbar = ConvertTo-ReadableSize -Size $DateiGroesse
+        $Protokoll = [PSCustomObject]@{
+            "Zeitstempel" = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+            "Name" = $_.Name
+            "Groeße" = $DateiGroesseLesbar
+        }
+        $Protokoll | Export-Csv -Path (Join-Path -Path $ProtokollOrdner -ChildPath $ProtokollDatei) -Append -Encoding UTF8 -NoTypeInformation -Delimiter ';'
+    }
 }
